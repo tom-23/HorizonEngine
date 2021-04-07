@@ -1,0 +1,6 @@
+[submodule "lib/LabSound"]
+	path = lib/LabSound
+	url = https://github.com/LabSound/LabSound.git
+[submodule "lib/CuteIPC"]
+	path = lib/CuteIPC
+	url = https://github.com/dept2/CuteIPC.git
