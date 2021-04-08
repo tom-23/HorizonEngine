@@ -58,8 +58,9 @@ public:
         void setPan(float _value);
         float getPan();
 
-        std::vector<int> getLMeterData();
-        std::vector<int> getRMeterData();
+        QPair<int, int> getLMeterData();
+        QPair<int, int> getRMeterData();
+
 
         float peakdB;
 

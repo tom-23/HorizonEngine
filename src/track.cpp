@@ -257,7 +257,8 @@ bool Track::getSolo() {
     return solo;
 }
 
-std::vector<int> Track::getLMeterData() {
+
+QPair<int, int> Track::getLMeterData() {
 
     std::vector<float> buffer(2048);
 
@@ -278,11 +279,10 @@ std::vector<int> Track::getLMeterData() {
         peakdB = std::ceil(avgPowerDecibels * 100.0) / 100.0;
 
     }
-    return std::vector<int> {static_cast<int>(round(avgPowerDecibels)), static_cast<int>(round(peakInstantaneousPowerDecibels))};
-
+    return {static_cast<int>(round(avgPowerDecibels)), static_cast<int>(round(peakInstantaneousPowerDecibels))};
 }
 
-std::vector<int> Track::getRMeterData() {
+QPair<int, int> Track::getRMeterData() {
 
     std::vector<float> buffer(2048);
 
@@ -304,8 +304,7 @@ std::vector<int> Track::getRMeterData() {
 
     }
 
-    return std::vector<int> {static_cast<int>(round(avgPowerDecibels)), static_cast<int>(round(peakInstantaneousPowerDecibels))};
-
+    return {static_cast<int>(round(avgPowerDecibels)), static_cast<int>(round(peakInstantaneousPowerDecibels))};
 }
 
 AudioRegion* Track::getAudioRegionByIndex(int index) {

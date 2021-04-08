@@ -5,9 +5,9 @@
 #include "audioregion.h"
 #include "server.h"
 
-AudioManager::AudioManager(QObject *parent) : QObject(parent)
-{
+AudioManager::AudioManager(QObject *parent) : QObject(parent) {
     stopTime = 0.0;
+    startTime = 0.0;
     isPlaying = false;
     currentGridTime = 1.0;
     scheduled = false;
@@ -20,20 +20,11 @@ AudioManager::AudioManager(QObject *parent) : QObject(parent)
 
     trackList = new std::vector<class Track *>();
 
-    std::thread threadObj([=] () {
-            while (true) {
-                if (isPlaying) {
-                    for (int i = 0; i < int(trackList->size()); i++) {
-                            trackList->at(i)->scheduleNextBar();
-                    }
-                }
-            std::this_thread::sleep_for(250ms);
+    audioSchedulingThread->audioManager = this;
+    audioSchedulingThread->run();
 
-            }
-   });
-
-   threadObj.detach();
-
+    sharedMemory->audioManager = this;
+    sharedMemory->run();
 }
 
 inline std::pair<AudioStreamConfig, AudioStreamConfig> GetDefaultAudioDeviceConfiguration(const bool with_input = false)
@@ -85,7 +76,6 @@ inline std::pair<AudioStreamConfig, AudioStreamConfig> GetDefaultAudioDeviceConf
 void AudioManager::initContext() {
     const auto defaultAudioDeviceConfigurations = GetDefaultAudioDeviceConfiguration();
     context = lab::MakeRealtimeAudioContext(defaultAudioDeviceConfigurations.second, defaultAudioDeviceConfigurations.first);
-
     lab::AudioContext& ac = *context.get();
 
     outputNode = std::make_shared<GainNode>(ac);
@@ -121,13 +111,7 @@ void AudioManager::pause() {
 
 void AudioManager::stop() {
 
-    if (isPlaying == true) {
-        isPlaying = false;
-        cancelTrackPlayback();
-        if (!rendering) {
-            eventTimer->stop();
-        }
-    }
+    pause();
     // We put the playhead to the start when we hit the stop button. We also set the stop time to 0.0 too.
     stopTime = 0.0;
     currentGridTime = 1.0;
@@ -137,6 +121,7 @@ void AudioManager::eventLoop() {
     float relativeTime = (context->currentTime() - startTime) + stopTime;
     currentGridTime = ((relativeTime / beatLength) / division) + 1.0;
     //scheduleTracks();
+
 
     if (rendering == true) {
         //dialogs::ProgressDialog::updateValue(int(context->currentTime()));
@@ -167,6 +152,13 @@ double AudioManager::getBPM() {
 }
 
 float AudioManager::getCurrentGridTime() {
+    if (context == nullptr) {
+        return 1;
+    }
+    if (isPlaying) {
+        float relativeTime = (context->currentTime() - startTime) + stopTime;
+        currentGridTime = ((relativeTime / beatLength) / division) + 1.0;
+    }
     return currentGridTime;
 }
 
@@ -273,6 +265,10 @@ Track* AudioManager::getTrack(QString uuid) {
     return nullptr;
 }
 
+Track* AudioManager::getTrack(int index) {
+    return trackList->at(index);
+}
+
 AudioRegion* AudioManager::getAudioRegion(QString uuid) {
     for (int ti= 0; ti < this->trackListCount(); ti++) {
         Track *track = trackList->at(ti);
@@ -334,3 +330,56 @@ void AudioManager::renderAudio(QObject *parent, QString fileName, int sampleRate
     //context.swap(offlineContext);
 }
 
+void AudioManager::loadAudioRegion(AudioRegion *audioRegion) {
+    audioRegionLoadQueue->push_back(audioRegion);
+    if (loadQueueThreads->size() == 0 && loadQueueThreads->size() < 5) {
+        FileLoading *fileloading = new FileLoading();
+        fileloading->audioRegionQueue = audioRegionLoadQueue;
+        fileloading->start();
+    }
+}
+
+void AudioManager::deSerialize(QJsonObject root) {
+
+    setBPM(root.value("tempo").toDouble());
+
+    for (int i = 0; i < root.value("tracks").toArray().size(); i++) {
+
+        QJsonObject trackJSON = root.value("tracks").toArray().at(i).toObject();
+        if (trackJSON.value("type") == "track") {
+            logs::out(3, "Adding track");
+            QString trackUuid;
+            if (trackJSON.value("uuid").toString() == "") {
+                trackUuid = QUuid::createUuid().toString();
+            } else {
+                trackUuid = trackJSON.value("uuid").toString();
+            }
+            Track *track = addTrack(trackUuid);
+
+            for (int ar = 0; ar < trackJSON.value("audioRegions").toArray().size(); ar++) {
+                QJsonObject audioRegionJSON = trackJSON.value("audioRegions").toArray().at(ar).toObject();
+
+                if (audioRegionJSON.value("type").toString() == "audioRegion") {
+                    logs::out(3, "Adding audio region");
+                    QString regionUuid;
+                    if (audioRegionJSON.value("uuid").toString() == "") {
+                        regionUuid = QUuid::createUuid().toString();
+                    } else {
+                        regionUuid = audioRegionJSON.value("uuid").toString();
+                    }
+                    AudioRegion *audioRegion = track->addAudioRegion(regionUuid);
+                    audioRegion->setGridLocation(std::stod(audioRegionJSON.value("gridLocation").toString().toStdString()));
+                    QString tempDir = "";
+                    if (audioRegionJSON.value("tempLocation").toBool()) { // if this file is being sent from the web...
+                        tempDir = QStandardPaths::writableLocation(QStandardPaths::MusicLocation) + "/Horizon";
+                    }
+                    audioRegion->loadFile(tempDir + audioRegionJSON.value("filePath").toString());
+
+                }
+            }
+            track->setGain(std::stof(trackJSON.value("gain").toString().toStdString()));
+            track->setPan(std::stof(trackJSON.value("pan").toString().toStdString()));
+            track->setMute(trackJSON.value("mute").toBool());
+        }
+    }
+}

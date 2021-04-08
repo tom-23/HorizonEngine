@@ -7,15 +7,19 @@ Server::Server(QObject *parent) : QObject(parent)
     localServer = new QLocalServer(this);
     connect(localServer, &QLocalServer::newConnection, this, [=] () {
         socket = localServer->nextPendingConnection();
-        dataStream.setDevice(socket);
-        dataStream.setVersion(QDataStream::Qt_5_10);
+        in.setDevice(socket);
+        in.setVersion(QDataStream::Qt_5_10);
         connect(socket, &QLocalSocket::disconnected, this, &Server::socketDisconnected);
         connect(socket, &QLocalSocket::readyRead, this, &Server::readReady);
-        qDebug() << "New Connection recieved!";
+        logs::out(3, "New connection recieved");
     });
 
     localServer->listen("HorizonAUMANEngine");
-
+    QJsonDocument doc;
+    QJsonObject obj;
+    obj.insert("status", "listening");
+    doc.setObject(obj);
+    std::cout << doc.toJson().toStdString();
 }
 
 void Server::setAudioManager(AudioManager *_audioManager) {
@@ -24,7 +28,7 @@ void Server::setAudioManager(AudioManager *_audioManager) {
 }
 
 void Server::sendStatMessage(QString message, QJsonValue value0, QJsonValue value1) {
-    qDebug() << "Sending stat message";
+    logs::out(3, "Sending command");
     QJsonObject obj;
     obj.insert("cmnd", message);
     obj.insert("value0", value0);
@@ -32,66 +36,58 @@ void Server::sendStatMessage(QString message, QJsonValue value0, QJsonValue valu
     obj.insert("value1", value1);
     QJsonDocument doc;
     doc.setObject(obj);
-    dataQueue->push_back(QString::fromUtf8(doc.toJson(QJsonDocument::Compact)));
-    if (dataQueue->size() == 1) {
-        writeString();
-    }
+    //dataQueue->push_back(QString::fromUtf8(doc.toJson(QJsonDocument::Compact)));
+    writeString(QString::fromUtf8(doc.toJson(QJsonDocument::Compact)));
 }
 
 void Server::socketDisconnected() {
-    qDebug() << "Socket disconnected";
+    logs::out(3, "Socket disconnected! Quitting...");
+    qApp->exit(0);
 }
 
-void Server::writeString() {
-    if (dataQueue->size() == 0) {
-        return;
-    }
-    //string = "TESTING";
+void Server::writeString(QString string) {
     QByteArray block;
     QDataStream out(&block, QIODevice::WriteOnly);
     out.setVersion(QDataStream::Qt_5_10);
-    const QString &message = dataQueue->at(0);
-    out << quint32(message.size());
-    out << message;
+    out << string;
     socket->write(block);
-    socket->flush();
+    socket->waitForBytesWritten();
+    qApp->processEvents();
 }
 
 void Server::readReady() {
-    qDebug() << "Received Data";
+    logs::out(3, "Received Data");
 
-    if (blockSize == 0) {
-        // Relies on the fact that QDataStream serializes a quint32 into
-        // sizeof(quint32) bytes
-        if (socket->bytesAvailable() < (int) sizeof(quint32)) { return; };
-        dataStream >> blockSize;
+    c = c + 1;
+    qDebug() << "cval" << c;
+
+
+
+    while (!in.atEnd()) {
+        in.startTransaction();
+        QString data;
+        in >> data;
+
+        if (!in.commitTransaction()){
+
+            logs::out(3, "Data isn't complete. Waiting for next part...");
+                // readyRead will be called again when there is more data
+                return;
+        }
+        recievedCompleteData(data);
+        //data = "";
+        //in >> data;
     }
+}
 
-
-    if (socket->bytesAvailable() < blockSize || dataStream.atEnd()) {
-        return;
-    }
-    QString data;
-    dataStream >> data;
-    blockSize = 0;
-    qDebug() << data;
+void Server::recievedCompleteData(QString data) {
     QJsonDocument doc = QJsonDocument::fromJson(data.toUtf8());
 
     QJsonObject obj = doc.object();
-    if (!obj.value("result").isUndefined()) {
-        qDebug() << "Got result";
-        if (doc.object().value("result").toString() == "OK") {
-            if (dataQueue->size() != 0) {
-                dataQueue->pop_front();
-                writeString();
-                socket->flush();
-            }
-        }
-        return;
-    }
+
     QString cmnd = obj.value("cmnd").toString();
-    qDebug() << "Processing CMND:" << cmnd;
-    qDebug() << data;
+    logs::out(3, "Got data" + data);
+    logs::out(3, "Processing CMND:" + cmnd);
     if (cmnd == "init") {
         audioManager->initContext();
     }
@@ -111,6 +107,21 @@ void Server::readReady() {
         audioManager->addTrack(uuid);
     }
 
+    if (cmnd == "setTrackGain") {
+        QString uuid = obj.value("value0").toString();
+        audioManager->getTrack(uuid)->setGain(obj.value("value1").toDouble());
+    }
+
+    if (cmnd == "setTrackPan") {
+        QString uuid = obj.value("value0").toString();
+        audioManager->getTrack(uuid)->setPan(obj.value("value1").toInt());
+    }
+
+    if (cmnd == "setTrackMute") {
+        QString uuid = obj.value("value0").toString();
+        audioManager->getTrack(uuid)->setMute(obj.value("value1").toBool());
+    }
+
     if (cmnd == "addAudioRegion") {
         QString trackUUID = obj.value("value0").toString();
         QString regionUUID = obj.value("value1").toString();
@@ -125,6 +136,17 @@ void Server::readReady() {
         audioRegion->loadFile(fileName);
     }
 
+    if (cmnd == "setRegionLocation") {
+        QString regionUUID = obj.value("value0").toString();
+        AudioRegion *audioRegion = audioManager->getAudioRegion(regionUUID);
+        audioRegion->setGridLocation(obj.value("value1").toDouble());
+    }
+
+    if (cmnd == "loadProject") {
+        QJsonObject project = obj.value("value0").toObject();
+        audioManager->deSerialize(project);
+    }
+
     if (cmnd == "play") {
         audioManager->play();
     }
@@ -136,19 +158,21 @@ void Server::readReady() {
     if (cmnd == "stop") {
         audioManager->stop();
     }
-    socket->flush();
-    sendConfirmation();
+        logs::out(3, "Processed " + cmnd);
+
+
+    qApp->processEvents();
 }
 
-
 void Server::sendConfirmation() {
-    qDebug() << "Sending confirmation";
+
+    logs::out(3, "Sending result...");
     QJsonObject obj;
     obj.insert("result", "OK");
     QJsonDocument doc;
     doc.setObject(obj);
     dataQueue->push_back(QString::fromUtf8(doc.toJson(QJsonDocument::Compact)));
-    if (dataQueue->size() == 1) {
-        writeString();
+    if (dataQueue->size() >= 1) {
+        //writeString();
     }
 }

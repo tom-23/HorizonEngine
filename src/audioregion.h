@@ -5,7 +5,7 @@
 #include <QFileInfo>
 #include <QJsonValue>
 
-#include "fileloading.h"
+
 
 #include "region.h"
 class Track;
@@ -37,15 +37,13 @@ public:
         std::shared_ptr<AudioBus> audioClipBus;
         std::shared_ptr<SampledAudioNode> audioClipNode;
 
+        void loadedFileCallBack();
+
 
     private:
 
 
         QString loadedFileName;
-
-        void loadedFileCallBack();
-
-        FileLoading *fileLoadingThread;
 
     };
 

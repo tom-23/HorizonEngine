@@ -2,10 +2,12 @@
 #define FILELOADING_H
 
 #include <QThread>
-#include "audiomanager.h"
+#include "LabSound/LabSound.h"
+//#include "audiomanager.h"
 
-//class AudioManager;
-//class AudioRegion;
+class AudioManager;
+class AudioRegion;
+//class AudioBus;
 
 using namespace lab;
 
@@ -15,8 +17,7 @@ class FileLoading : public QThread
 public:
     FileLoading();
     void run() override;
-    AudioRegion *audioRegion;
-    QString fileName;
+    QList<AudioRegion *> *audioRegionQueue;
     std::vector<const float *> peaks;
 signals:
     void resultReady();

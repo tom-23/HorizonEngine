@@ -8,6 +8,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonArray>
+#include <QCoreApplication>
 
 #include "audiomanager.h"
 #include "track.h"
@@ -27,15 +28,27 @@ private:
     int connectionCount = 0;
     quint32 blockSize = 0;
 
-    void writeString();
+    int c = 0;
+
+    void writeString(QString string);
     QList<QString> *dataQueue = new QList<QString>;
 
     void readReady();
+
+    void recievedCompleteData(QString data);
+
     void socketDisconnected();
 
     void sendConfirmation();
 
     void sendStatMessage(QString message, QJsonValue value0, QJsonValue value1);
+
+    QString data;
+
+    QDataStream in;
+
+    QByteArray inBlock;
+
 signals:
 
 };

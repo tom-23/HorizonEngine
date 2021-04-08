@@ -9,18 +9,11 @@ AudioRegion::AudioRegion(AudioManager *_audioManager, Track *_track, QString _uu
 void AudioRegion::loadFile(QString fileName) {
 
     logs::out(3, "Begining file loading...");
-
     QFileInfo fileInfo(fileName);
     setRegionName(fileInfo.fileName());
-
     loadedFileName = fileName;
-
-    fileLoadingThread = new FileLoading();
-    fileLoadingThread->fileName = fileName;
-    fileLoadingThread->audioRegion = this;
-    connect(fileLoadingThread, &FileLoading::resultReady, this, &AudioRegion::loadedFileCallBack);
-    logs::out(3, "Spawining thread...");
-    fileLoadingThread->run();
+    audioManager->loadAudioRegion(this);
+    return;
 }
 
 void AudioRegion::loadedFileCallBack() {

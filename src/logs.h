@@ -3,6 +3,7 @@
 
 #include <QObject>
 #include <QDebug>
+#include <iostream>
 
 namespace logs {
     void out(int level, QString message);

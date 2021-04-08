@@ -1,5 +1,7 @@
 #include "fileloading.h"
 #include "audioregion.h"
+#include "audiomanager.h"
+
 
 // Qt Shenanigans
 Q_DECLARE_SMART_POINTER_METATYPE(std::shared_ptr)
@@ -17,20 +19,25 @@ FileLoading::FileLoading()
 void FileLoading::run() {
     logs::out(3, "Spawned file handling thread");
         logs::out(3, "Starting file loading...");
-        audioRegion->audioClipBus = MakeBusFromSampleFile(fileName);
+        while (audioRegionQueue->size() != 0) {
+            AudioRegion *audioRegion = audioRegionQueue->at(0);
+            audioRegionQueue->pop_front();
+            connect(this, &FileLoading::resultReady, audioRegion, &AudioRegion::loadedFileCallBack);
+            audioRegion->audioClipBus = MakeBusFromSampleFile(audioRegion->getLoadedFileName());
 
-        logs::out(3, "Processing...");
-        std::shared_ptr<lab::AudioContext> audioContext = audioRegion->getAudioManager()->context;
+            logs::out(3, "Processing...");
+            std::shared_ptr<lab::AudioContext> audioContext = audioRegion->getAudioManager()->context;
 
-        audioRegion->audioClipNode = std::make_shared<SampledAudioNode>(*audioContext.get());
-        {
-            ContextRenderLock r(audioContext.get(), "Horizon");
-            audioRegion->audioClipNode->setBus(r, audioRegion->audioClipBus);
+            audioRegion->audioClipNode = std::make_shared<SampledAudioNode>(*audioContext.get());
+            {
+                ContextRenderLock r(audioContext.get(), "Horizon");
+                audioRegion->audioClipNode->setBus(r, audioRegion->audioClipBus);
+            }
+
+            logs::out(3, "Loaded audio, running callback function...");
+            emit resultReady();
+            disconnect(this, &FileLoading::resultReady, audioRegion, &AudioRegion::loadedFileCallBack);
         }
-
-        logs::out(3, "Loaded audio, running callback function...");
-
-        emit resultReady();
 }
 
 /* MakeBusFromSampleFile

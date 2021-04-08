@@ -3,5 +3,5 @@
 
 
 void logs::out(int level, QString message) {
-    qDebug() << "[INFO]" << message;
+    std::cout << "[ENGINE] " << message.toStdString() << std::endl;
 }

@@ -10,12 +10,17 @@
 #include <ratio>
 #include <QDebug>
 #include <QJsonValue>
+#include <QStandardPaths>
+#include <QSharedMemory>
+#include <QSystemSemaphore>
+
 #include "LabSound/LabSound.h"
 
 
 #include "logs.h"
-
-
+#include "fileloading.h"
+#include "audioschedulingthread.h"
+#include "sharedmemory.h"
 
 
 class Track;
@@ -24,6 +29,7 @@ class AudioRegion;
 
 #include <QObject>
 #include <QTimer>
+#include <QThread>
 
 using namespace lab;
 using namespace std::chrono_literals;
@@ -55,6 +61,7 @@ public:
     float getCurrentRelativeTime();
 
     Track* addTrack(QString trackUUID);
+
     void removeTrack(Track *track);
 
     int trackListCount();
@@ -63,7 +70,7 @@ public:
     std::shared_ptr<GainNode> getOutputNode();
 
 
-    std::shared_ptr<AudioContext> context;
+    std::shared_ptr<AudioContext> context = nullptr;
 
     // uh?
     void engageSolo();
@@ -79,13 +86,17 @@ public:
     void setTrackGain(QString uuid, float gain);
 
     Track* getTrack(QString uuid);
+    Track* getTrack(int index);
     AudioRegion* getAudioRegion(QString uuid);
 
     void renderAudio(QObject *parent, QString fileName, int sampleRate, int channels);
 
+    void loadAudioRegion(AudioRegion *audioRegion);
 
 
     void eventLoop();
+
+    void deSerialize(QJsonObject projectJson);
 
 private:
 
@@ -124,6 +135,13 @@ private:
     bool rendering;
 
     QTimer *eventTimer;
+
+    QList<AudioRegion *> *audioRegionLoadQueue = new QList<AudioRegion *>;
+    QList<FileLoading *> *loadQueueThreads = new QList<FileLoading *>;
+
+    AudioSchedulingThread *audioSchedulingThread = new AudioSchedulingThread;
+    SharedMemory *sharedMemory = new SharedMemory;
+
 
 signals:
     //void send_stat_message(QString message, QJsonValue value1);
