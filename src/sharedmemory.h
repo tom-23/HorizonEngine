@@ -12,16 +12,22 @@ class AudioManager;
 
 class SharedMemory : public QThread
 {
+    Q_OBJECT
 public:
-    SharedMemory();
     AudioManager *audioManager;
     void run() override;
 
     QTimer *updateTimer;
 
-    QSystemSemaphore readSemaphore;
-    QSystemSemaphore writeSemaphore;
-    QSharedMemory sharedMemory;
+    void delay( int millisecondsToWait );
+
+    void reCreateMemory(int size);
+
+    int lastMemSize = 0;
+
+    QSystemSemaphore *readSemaphore;
+    QSystemSemaphore *writeSemaphore;
+    QSharedMemory *sharedMemory;
 };
 
 #endif // SHAREDMEMORY_H

@@ -44,13 +44,4 @@ add_subdirectory(lib/LabSound)
 add_subdirectory(src)
 
 
-if(DEFINED HORIZON_EXECUTABLE_NAME)
-    message(STATUS "Horizon found in project parent. Setting appropriate target directory...")
-    if (APPLE)
-        set_target_properties(${HORIZONENGINE_EXECUTABLE_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/${HORIZON_EXECUTABLE_NAME}.app/Contents/MacOS)
-    else()
-        set_target_properties(${HORIZONENGINE_EXECUTABLE_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-    endif()
-else()
-    message(STATUS "Horizon not found. Building standalone...")
-endif()
+

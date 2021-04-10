@@ -13,6 +13,7 @@
 #include <QStandardPaths>
 #include <QSharedMemory>
 #include <QSystemSemaphore>
+#include <QThread>
 
 #include "LabSound/LabSound.h"
 
@@ -140,7 +141,7 @@ private:
     QList<FileLoading *> *loadQueueThreads = new QList<FileLoading *>;
 
     AudioSchedulingThread *audioSchedulingThread = new AudioSchedulingThread;
-    SharedMemory *sharedMemory = new SharedMemory;
+    SharedMemory sharedMemory;
 
 
 signals:

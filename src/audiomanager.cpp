@@ -23,8 +23,10 @@ AudioManager::AudioManager(QObject *parent) : QObject(parent) {
     audioSchedulingThread->audioManager = this;
     audioSchedulingThread->run();
 
-    sharedMemory->audioManager = this;
-    sharedMemory->run();
+
+    sharedMemory.audioManager = this;
+    sharedMemory.start();
+
 }
 
 inline std::pair<AudioStreamConfig, AudioStreamConfig> GetDefaultAudioDeviceConfiguration(const bool with_input = false)

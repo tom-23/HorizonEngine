@@ -2,17 +2,38 @@
 #include "audiomanager.h"
 #include "track.h"
 
-SharedMemory::SharedMemory() :
-    readSemaphore("HorizonReadSemaphore"),
-    writeSemaphore("HorizonWriteSemaphore"),
-    sharedMemory("HorizonSharedData")
+void SharedMemory::delay( int millisecondsToWait )
 {
-
+    QTime dieTime = QTime::currentTime().addMSecs( millisecondsToWait );
+    while( QTime::currentTime() < dieTime )
+    {
+        QCoreApplication::processEvents( QEventLoop::AllEvents, 100 );
+    }
 }
 
 void SharedMemory::run() {
-    updateTimer = new QTimer(this);
-    connect(updateTimer, &QTimer::timeout, this, [=] () {
+    readSemaphore = new QSystemSemaphore("HorizonReadSemaphore");
+    writeSemaphore = new QSystemSemaphore("HorizonWriteSemaphore");
+    sharedMemory = new QSharedMemory("HorizonSharedData");
+
+
+    if (!sharedMemory->create(1048576)) {
+        qDebug() << sharedMemory->error();
+        sharedMemory->attach();
+        sharedMemory->detach();
+
+        if (!sharedMemory->create(1048576)) {
+            qDebug() << sharedMemory->error();
+            logs::out(3, "Failed to create shared memory. Exiting thread... " + sharedMemory->errorString());
+            return;
+        }
+    }
+
+    logs::out(3, "Created shared memory. Begining update loop...");
+
+    readSemaphore->release();
+
+    while (true) {
         QPair<double, QList<QList<int>>> horizonData;
 
         horizonData.first = audioManager->getCurrentGridTime();
@@ -34,7 +55,9 @@ void SharedMemory::run() {
             horizonData.second.append(trackData);
         }
 
-        readSemaphore.acquire();
+        //qDebug() << "waiting for read semaphore";
+        readSemaphore->acquire();
+        //qDebug() << "RUNNING";
 
         QBuffer buffer;
         buffer.open(QBuffer::ReadWrite);
@@ -42,21 +65,33 @@ void SharedMemory::run() {
         out << horizonData;
         int size = buffer.size();
 
-        sharedMemory.lock();
+        //if (size != lastMemSize) {
+        //    reCreateMemory(size);
+        //}
 
-        if (!sharedMemory.create(size)) {
-            qDebug() << "Unable to create shared memory segment.";
-            return;
-        }
-
-        char *to = (char*)sharedMemory.data();
+        char *to = (char*)sharedMemory->data();
         const char *from = buffer.data().data();
-        memcpy(to, from, qMin(sharedMemory.size(), size));
+        memcpy(to, from, qMin(sharedMemory->size(), size));
 
-        sharedMemory.unlock();
+        //sharedMemory->unlock();
 
-        writeSemaphore.release();
-    });
+        writeSemaphore->release();
 
-    updateTimer->start(10);
+        delay(50);
+    }
+}
+
+void SharedMemory::reCreateMemory(int size) {
+    char *to = (char*)sharedMemory->data();
+    memset(to, 0, size);
+    lastMemSize = size;
+    logs::out(3, "Resized memory to " + QString::number(size));
+
+    //sharedMemory->attach();
+    //sharedMemory->detach();
+    //if (!sharedMemory->create(size + 1024)) {
+    //    qDebug() << "Unable to create shared memory segment." << sharedMemory->errorString();
+    //    qDebug() << size + 1024;
+//
+    //}
 }

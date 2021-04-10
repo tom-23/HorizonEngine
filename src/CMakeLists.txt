@@ -60,6 +60,17 @@ endforeach()
 
 target_link_libraries(${HORIZONENGINE_EXECUTABLE_NAME} ${horizonengine_LIBRARIES})
 
+if(DEFINED HORIZON_EXECUTABLE_NAME)
+    message(STATUS "Horizon found in project parent. Setting appropriate target directory...")
+    if (APPLE)
+        set_target_properties(${HORIZONENGINE_EXECUTABLE_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${HORIZON_CURRENT_BINARY_DIR}/${HORIZON_EXECUTABLE_NAME}.app/Contents/MacOS)
+    else()
+        set_target_properties(${HORIZONENGINE_EXECUTABLE_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${HORIZON_CURRENT_BINARY_DIR}/../)
+    endif()
+else()
+    message(STATUS "Horizon not found. Building standalone...")
+endif()
+
 install(TARGETS ${HORIZONENGINE_EXECUTABLE_NAME}
     BUNDLE DESTINATION . COMPONENT Runtime
     RUNTIME DESTINATION bin COMPONENT Runtime
