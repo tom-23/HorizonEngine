@@ -34,7 +34,7 @@ endif()
 add_executable(${HORIZONENGINE_EXECUTABLE_NAME} ${horizonengine_COMPILE})
 
 # Qt modules
-list(APPEND horizonengine_qt_modules)
+list(APPEND horizonengine_qt_modules "Network")
 foreach(horizonengine_qt_module ${horizonengine_qt_modules})
   message(STATUS "Finding QT Plugin ${horizonengine_qt_module}")
   find_package(Qt5${horizonengine_qt_module} REQUIRED)
